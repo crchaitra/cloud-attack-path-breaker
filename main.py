@@ -1,286 +1,277 @@
 
 import json
+from pathlib import Path
+
 import networkx as nx
 
 
-SENSITIVITY_POINTS = {
-    "low": 5,
-    "medium": 10,
-    "high": 20,
-    "critical": 30,
-}
-
-
 def load_environment(file_path="cloud_environment.json"):
-    """Load the simulated cloud environment."""
-    with open(file_path, "r", encoding="utf-8") as file:
+    """Load the cloud environment configuration from a JSON file."""
+    path = Path(file_path)
+
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Configuration file not found: {path.resolve()}"
+        )
+
+    with path.open("r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def build_graph(environment):
-    """Validate the environment and build the directed graph."""
-    required_keys = {
-        "resources",
-        "connections",
-        "entry_point",
-        "protected_asset",
-    }
+    """Build and validate a directed graph of cloud resources."""
+    resources = environment.get("resources", [])
+    connections = environment.get("connections", [])
 
-    if not required_keys.issubset(environment):
-        raise ValueError("Environment is missing required keys.")
+    if not isinstance(resources, list) or not isinstance(connections, list):
+        raise ValueError("Resources and connections must be lists.")
 
-    resources = environment["resources"]
-    connections = environment["connections"]
-    entry_point = environment["entry_point"]
-    protected_asset = environment["protected_asset"]
-
-    resource_ids = [resource.get("id") for resource in resources]
-
-    if None in resource_ids:
-        raise ValueError("Every resource must have an ID.")
-
-    if len(resource_ids) != len(set(resource_ids)):
-        raise ValueError("Duplicate resource IDs found.")
-
-    if entry_point not in resource_ids:
-        raise ValueError("Entry point does not exist in resources.")
-
-    if protected_asset not in resource_ids:
-        raise ValueError("Protected asset does not exist in resources.")
-
-    cloud = nx.DiGraph()
+    graph = nx.DiGraph()
+    resource_ids = set()
 
     for resource in resources:
-        resource_id = resource["id"]
+        resource_id = resource.get("id")
 
-        if "public" not in resource or "sensitivity" not in resource:
-            raise ValueError(
-                f"Resource {resource_id} is missing security attributes."
-            )
+        if not resource_id:
+            raise ValueError("Every resource must have an ID.")
 
-        if not isinstance(resource["public"], bool):
-            raise ValueError(
-                f"Resource {resource_id} must have a Boolean public value."
-            )
+        if resource_id in resource_ids:
+            raise ValueError(f"Duplicate resource ID: {resource_id}")
 
-        if resource["sensitivity"] not in SENSITIVITY_POINTS:
-            raise ValueError(
-                f"Invalid sensitivity for resource {resource_id}."
-            )
-
-        cloud.add_node(
-            resource_id,
-            name=resource["name"],
-            type=resource["type"],
-            public=resource["public"],
-            sensitivity=resource["sensitivity"],
-        )
+        resource_ids.add(resource_id)
+        graph.add_node(resource_id, **resource)
 
     for connection in connections:
         source = connection.get("source")
         target = connection.get("target")
-        connection_type = connection.get("type")
 
         if source not in resource_ids or target not in resource_ids:
             raise ValueError(
-                f"Unknown resource in connection: {source} -> {target}"
+                f"Connection references an unknown resource: "
+                f"{source} -> {target}"
             )
 
-        if not connection_type:
-            raise ValueError(
-                f"Connection {source} -> {target} has no type."
-            )
+        graph.add_edge(
+            source,
+            target,
+            **{
+                key: value
+                for key, value in connection.items()
+                if key not in ("source", "target")
+            },
+        )
 
-        cloud.add_edge(source, target, type=connection_type)
+    entry_point = environment.get("entry_point")
+    protected_asset = environment.get("protected_asset")
 
-    return cloud
+    if entry_point not in resource_ids:
+        raise ValueError("Entry point is missing or does not exist.")
+
+    if protected_asset not in resource_ids:
+        raise ValueError("Protected asset is missing or does not exist.")
+
+    return graph
 
 
 def find_attack_paths(cloud, entry_point, protected_asset):
-    """Find all simple paths to the protected asset."""
-    if entry_point not in cloud:
-        raise ValueError("Entry point does not exist in the graph.")
+    """Find all simple directed paths to the protected asset."""
+    if entry_point not in cloud or protected_asset not in cloud:
+        return []
 
-    if protected_asset not in cloud:
-        raise ValueError("Protected asset does not exist in the graph.")
-
-    return list(
-        nx.all_simple_paths(
-            cloud,
-            source=entry_point,
-            target=protected_asset,
+    try:
+        return list(
+            nx.all_simple_paths(cloud, entry_point, protected_asset)
         )
-    )
+    except nx.NetworkXNoPath:
+        return []
 
 
 def score_path(cloud, path):
-    """Calculate a simple illustrative risk score."""
+    """Calculate an illustrative risk score from 0 to 100."""
+    if not path:
+        return 0, ["No resources in path"]
+
     score = 0
     reasons = []
 
-    public_nodes = [
-        node for node in path
-        if cloud.nodes[node]["public"]
-    ]
-
-    if public_nodes:
+    # Public exposure increases risk.
+    if cloud.nodes[path[0]].get("public", False):
         score += 25
-        reasons.append("Contains publicly exposed resources (+25)")
+        reasons.append("Public entry point (+25)")
 
-    identity_steps = sum(
-        1
-        for source, target in zip(path, path[1:])
-        if cloud.edges[source, target]["type"] == "assume_role"
+    # Longer paths involve more opportunities for misconfiguration.
+    if len(path) > 2:
+        score += 10
+        reasons.append("Multiple steps in attack path (+10)")
+
+    sensitivity_values = {
+        "low": 5,
+        "medium": 10,
+        "high": 20,
+        "critical": 30,
+    }
+
+    highest_sensitivity = "low"
+    highest_value = 5
+
+    for node in path:
+        sensitivity = cloud.nodes[node].get("sensitivity", "low")
+        value = sensitivity_values.get(sensitivity, 5)
+
+        if value > highest_value:
+            highest_value = value
+            highest_sensitivity = sensitivity
+
+    score += highest_value
+    reasons.append(
+        f"Highest resource sensitivity: "
+        f"{highest_sensitivity} (+{highest_value})"
     )
 
-    if identity_steps:
-        points = min(identity_steps * 20, 40)
-        score += points
-        reasons.append(
-            f"Identity permission transitions (+{points})"
+    score = min(score, 100)
+    return score, reasons
+
+
+def recommend_remediations(cloud, entry_point, protected_asset):
+    """
+    Simulate removing individual connections and select the removal
+    that eliminates the most attack paths without modifying the original.
+    """
+    original_paths = find_attack_paths(
+        cloud, entry_point, protected_asset
+    )
+
+    if not original_paths:
+        return [], cloud.copy(), original_paths
+
+    candidates = []
+
+    for source, target, attributes in list(cloud.edges(data=True)):
+        simulated_graph = cloud.copy()
+        simulated_graph.remove_edge(source, target)
+
+        remaining_paths = find_attack_paths(
+            simulated_graph, entry_point, protected_asset
         )
 
-    most_sensitive = max(
-        (cloud.nodes[node]["sensitivity"] for node in path),
-        key=lambda value: SENSITIVITY_POINTS[value],
+        eliminated_count = len(original_paths) - len(remaining_paths)
+
+        if eliminated_count > 0:
+            candidates.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "connection_type": attributes.get("type", "unknown"),
+                    "paths_eliminated": eliminated_count,
+                    "paths_remaining": len(remaining_paths),
+                    "graph": simulated_graph,
+                }
+            )
+
+    # Prefer eliminating more paths, leaving fewer paths, and then
+    # prioritizing direct-access connections when results are tied.
+    candidates.sort(
+        key=lambda item: (
+            -item["paths_eliminated"],
+            item["paths_remaining"],
+            0 if item["connection_type"] == "direct_access" else 1,
+            item["source"],
+            item["target"],
+        )
     )
 
-    points = SENSITIVITY_POINTS[most_sensitive]
-    score += points
-    reasons.append(
-        f"Highest resource sensitivity: {most_sensitive} (+{points})"
-    )
+    if not candidates:
+        return [], cloud.copy(), original_paths
 
-    return min(score, 100), reasons
+    best = candidates[0]
 
+    recommendation = {
+        "source": best["source"],
+        "target": best["target"],
+        "connection_type": best["connection_type"],
+        "paths_eliminated": best["paths_eliminated"],
+        "paths_remaining": best["paths_remaining"],
+        "action": (
+            f"Review and restrict the connection from "
+            f"{best['source']} to {best['target']}"
+        ),
+    }
 
-def recommend_remediations(cloud, protected_asset):
-    """Recommend and simulate restricting direct access to protected storage."""
-    if protected_asset not in cloud:
-        raise ValueError("Protected asset does not exist in the graph.")
-
-    # Copy the graph so the original environment is not changed.
-    simulated_graph = cloud.copy()
-    recommendations = []
-
-    direct_sources = list(
-        simulated_graph.predecessors(protected_asset)
-    )
-
-    for source in direct_sources:
-        edge_type = simulated_graph.edges[
-            source, protected_asset
-        ]["type"]
-
-        if edge_type == "direct_access":
-            recommendations.append({
-                "source": source,
-                "target": protected_asset,
-                "connection_type": edge_type,
-                "action": (
-                    f"Remove or restrict direct access from "
-                    f"{source} to {protected_asset}"
-                ),
-            })
-
-            simulated_graph.remove_edge(source, protected_asset)
-
-    return recommendations, simulated_graph
+    return [recommendation], best["graph"], original_paths
 
 
 def main():
-    """Run the Cloud Attack-Path Breaker."""
-    environment = load_environment()
-    cloud = build_graph(environment)
+    """Run the cloud attack-path analysis from the terminal."""
+    try:
+        environment = load_environment()
+        cloud = build_graph(environment)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"Could not load cloud environment: {error}")
+        return
 
     entry_point = environment["entry_point"]
     protected_asset = environment["protected_asset"]
 
-    print("CLOUD ATTACK-PATH BREAKER")
-    print("=" * 40)
-    print("Configuration validation passed.")
+    print("=== Cloud Attack-Path Breaker ===")
     print(f"Resources: {cloud.number_of_nodes()}")
     print(f"Connections: {cloud.number_of_edges()}")
+    print(f"Entry point: {entry_point}")
+    print(f"Protected asset: {protected_asset}")
 
-    print("\nResources:")
-    for node, attributes in cloud.nodes(data=True):
-        print(
-            f"- {attributes['name']} "
-            f"({attributes['type']}, ID: {node})"
-        )
+    original_edges = set(cloud.edges())
+    original_paths = find_attack_paths(
+        cloud, entry_point, protected_asset
+    )
 
-    paths = find_attack_paths(cloud, entry_point, protected_asset)
+    print(f"\nAttack paths found: {len(original_paths)}")
 
-    print(f"\nFound {len(paths)} attack path(s):")
-
-    scored_paths = []
-
-    for path in paths:
+    for index, path in enumerate(original_paths, start=1):
         score, reasons = score_path(cloud, path)
-        scored_paths.append((score, path, reasons))
 
-    scored_paths.sort(key=lambda item: item[0], reverse=True)
-
-    for number, (score, path, reasons) in enumerate(
-        scored_paths, start=1
-    ):
-        names = [cloud.nodes[node]["name"] for node in path]
-
-        print(f"\nPath {number}: {' -> '.join(names)}")
+        print(f"\nPath {index}: {' -> '.join(path)}")
         print(f"Risk score: {score}/100")
 
         for reason in reasons:
             print(f"  - {reason}")
 
-    # Recommend and simulate remediation.
-    print("\n" + "=" * 40)
-    print("REMEDIATION RECOMMENDATIONS")
-    print("=" * 40)
+    print("\n=== Remediation Simulation ===")
 
-    recommendations, simulated_graph = recommend_remediations(
-        cloud, protected_asset
+    recommendations, simulated_graph, _ = recommend_remediations(
+        cloud, entry_point, protected_asset
     )
 
     if not recommendations:
-        print("No direct-access remediation recommendations found.")
+        print("No single-connection remediation was identified.")
     else:
-        for number, recommendation in enumerate(
-            recommendations, start=1
-        ):
-            print(f"\nRecommendation {number}:")
-            print(f"  Action: {recommendation['action']}")
+        for recommendation in recommendations:
+            print(f"Recommendation: {recommendation['action']}")
             print(
-                f"  Connection: {recommendation['source']} -> "
-                f"{recommendation['target']}"
+                f"Connection type: "
+                f"{recommendation['connection_type']}"
+            )
+            print(
+                f"Attack paths eliminated: "
+                f"{recommendation['paths_eliminated']}"
             )
 
-    # Verify whether the simulated change removes attack paths.
     remaining_paths = find_attack_paths(
         simulated_graph, entry_point, protected_asset
     )
 
-    print("\nSIMULATION RESULTS")
-    print("-" * 40)
-    print(f"Attack paths before remediation: {len(paths)}")
-    print(f"Attack paths after remediation: {len(remaining_paths)}")
-
-    if len(remaining_paths) < len(paths):
-        print("Result: The simulation reduced the number of attack paths.")
-    else:
-        print("Result: No reduction in attack paths was achieved.")
+    print(f"Attack paths before: {len(original_paths)}")
+    print(f"Attack paths after: {len(remaining_paths)}")
+    print(f"Original graph unchanged: {set(cloud.edges()) == original_edges}")
 
     if remaining_paths:
         print("\nRemaining attack paths:")
         for path in remaining_paths:
-            names = [
-                simulated_graph.nodes[node]["name"]
-                for node in path
-            ]
-            print(f"- {' -> '.join(names)}")
-    else:
-        print("No attack paths to the protected asset remain.")
+            print(" -> ".join(path))
 
-    print("\nOriginal graph unchanged:", cloud.number_of_edges() == 7)
+    print(
+        "\nNote: This is a simulated risk-reduction exercise. "
+        "Fewer attack paths do not by themselves prove that legitimate "
+        "access has been preserved."
+    )
 
 
 if __name__ == "__main__":

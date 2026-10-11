@@ -12,7 +12,6 @@ from main import (
 class TestAttackPaths(unittest.TestCase):
 
     def setUp(self):
-        """Create a small test environment for each test."""
         self.environment = {
             "resources": [
                 {
@@ -73,36 +72,28 @@ class TestAttackPaths(unittest.TestCase):
         self.graph = build_graph(self.environment)
 
     def test_finds_attack_path(self):
-        """Check that a route to sensitive storage is discovered."""
         paths = find_attack_paths(
             self.graph, "internet", "storage"
         )
-
         self.assertIn(["internet", "storage"], paths)
 
     def test_finds_multiple_attack_paths(self):
-        """Check that both routes to storage are discovered."""
         paths = find_attack_paths(
             self.graph, "internet", "storage"
         )
-
         self.assertEqual(len(paths), 2)
 
     def test_returns_no_path_when_unreachable(self):
-        """Check that disconnected storage has no attack path."""
         graph = build_graph(self.environment)
-
         graph.remove_edge("internet", "storage")
         graph.remove_edge("server", "storage")
 
         paths = find_attack_paths(
             graph, "internet", "storage"
         )
-
         self.assertEqual(paths, [])
 
     def test_invalid_configuration_is_rejected(self):
-        """Check that duplicate resource IDs are rejected."""
         invalid_environment = {
             **self.environment,
             "resources": (
@@ -115,40 +106,57 @@ class TestAttackPaths(unittest.TestCase):
             build_graph(invalid_environment)
 
     def test_critical_asset_increases_risk_score(self):
-        """Check that critical sensitivity contributes 30 points."""
         score, reasons = score_path(
-            self.graph,
-            ["internet", "storage"],
+            self.graph, ["internet", "storage"]
         )
 
         self.assertEqual(score, 55)
-
         self.assertIn(
             "Highest resource sensitivity: critical (+30)",
             reasons,
         )
 
     def test_remediation_removes_direct_access(self):
-        """Check that remediation removes the direct attack path."""
-        recommendations, simulated_graph = recommend_remediations(
-            self.graph, "storage"
+        recommendations, simulated_graph, original_paths = (
+            recommend_remediations(
+                self.graph, "internet", "storage"
+            )
         )
 
-        paths = find_attack_paths(
+        remaining_paths = find_attack_paths(
             simulated_graph, "internet", "storage"
         )
 
+        self.assertEqual(len(original_paths), 2)
         self.assertEqual(len(recommendations), 1)
-        self.assertEqual(len(paths), 1)
-        self.assertNotIn(["internet", "storage"], paths)
+        self.assertEqual(len(remaining_paths), 1)
+        self.assertNotIn(
+            ["internet", "storage"],
+            remaining_paths,
+        )
+
+        self.assertEqual(
+            recommendations[0]["connection_type"],
+            "direct_access",
+        )
 
     def test_remediation_preserves_original_graph(self):
-        """Check that remediation does not modify the original graph."""
         original_edges = set(self.graph.edges())
+        original_paths = find_attack_paths(
+            self.graph, "internet", "storage"
+        )
 
-        recommend_remediations(self.graph, "storage")
+        recommend_remediations(
+            self.graph, "internet", "storage"
+        )
 
         self.assertEqual(set(self.graph.edges()), original_edges)
+        self.assertEqual(
+            find_attack_paths(
+                self.graph, "internet", "storage"
+            ),
+            original_paths,
+        )
 
 
 if __name__ == "__main__":
