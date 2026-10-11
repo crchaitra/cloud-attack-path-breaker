@@ -23,16 +23,31 @@ if entry_point not in resource_ids:
 if protected_asset not in resource_ids:
     raise ValueError("Protected asset does not exist in resources.")
 
-# Build the cloud graph
+# Build the cloud graph with security attributes
 cloud = nx.DiGraph()
 
 for resource in resources:
+    if "public" not in resource or "sensitivity" not in resource:
+        raise ValueError(
+            f"Resource {resource['id']} is missing security attributes."
+        )
+
+    if resource["sensitivity"] not in {
+        "low", "medium", "high", "critical"
+    }:
+        raise ValueError(
+            f"Invalid sensitivity for resource {resource['id']}."
+        )
+
     cloud.add_node(
         resource["id"],
         name=resource["name"],
-        type=resource["type"]
+        type=resource["type"],
+        public=resource["public"],
+        sensitivity=resource["sensitivity"]
     )
 
+# Validate and add connections
 for connection in connections:
     source = connection["source"]
     target = connection["target"]
@@ -54,7 +69,56 @@ print("Configuration validation passed.")
 print(f"Resources: {cloud.number_of_nodes()}")
 print(f"Connections: {cloud.number_of_edges()}")
 
-# Find all simple paths to the protected asset
+# Risk weights for resource sensitivity
+sensitivity_points = {
+    "low": 5,
+    "medium": 10,
+    "high": 20,
+    "critical": 30
+}
+
+def score_path(path):
+    score = 0
+    reasons = []
+
+    # Score public resources along the path
+    public_nodes = [
+        node for node in path
+        if cloud.nodes[node]["public"]
+    ]
+
+    if public_nodes:
+        score += 25
+        reasons.append("Contains publicly exposed resources (+25)")
+
+    # Score identity permission transitions
+    identity_steps = sum(
+        1
+        for source, target in zip(path, path[1:])
+        if cloud.edges[source, target]["type"] == "assume_role"
+    )
+
+    if identity_steps:
+        points = min(identity_steps * 20, 40)
+        score += points
+        reasons.append(f"Identity permission transitions (+{points})")
+
+    # Score the most sensitive resource on the path
+    most_sensitive = max(
+        (cloud.nodes[node]["sensitivity"] for node in path),
+        key=lambda value: sensitivity_points[value]
+    )
+
+    points = sensitivity_points[most_sensitive]
+    score += points
+    reasons.append(
+        f"Highest resource sensitivity: {most_sensitive} (+{points})"
+    )
+
+    return min(score, 100), reasons
+
+
+# Find every simple path to the protected asset
 paths = list(
     nx.all_simple_paths(
         cloud,
@@ -62,38 +126,6 @@ paths = list(
         target=protected_asset
     )
 )
-
-# Explainable prototype risk scoring
-def score_path(path):
-    score = 0
-    reasons = []
-
-    # Public entry point
-    if path[0] == entry_point:
-        score += 30
-        reasons.append("Starts at the external entry point (+30)")
-
-    # Identity and permission transitions
-    identity_steps = 0
-
-    for source, target in zip(path, path[1:]):
-        connection_type = cloud.edges[source, target]["type"]
-
-        if connection_type == "assume_role":
-            identity_steps += 1
-
-    if identity_steps:
-        points = min(identity_steps * 20, 40)
-        score += points
-        reasons.append(f"Identity permission transitions (+{points})")
-
-    # Sensitive destination
-    if path[-1] == protected_asset:
-        score += 30
-        reasons.append("Reaches sensitive storage (+30)")
-
-    return min(score, 100), reasons
-
 
 if paths:
     print(f"\nFound {len(paths)} attack path(s):")
@@ -104,7 +136,6 @@ if paths:
         score, reasons = score_path(path)
         scored_paths.append((score, path, reasons))
 
-    # Show highest-scoring paths first
     scored_paths.sort(key=lambda item: item[0], reverse=True)
 
     for number, (score, path, reasons) in enumerate(

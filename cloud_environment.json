@@ -4,37 +4,51 @@
     {
       "id": "internet",
       "name": "Internet",
-      "type": "entry_point"
+      "type": "entry_point",
+      "public": true,
+      "sensitivity": "low"
     },
     {
       "id": "web_server",
       "name": "Web Server",
-      "type": "compute"
+      "type": "compute",
+      "public": true,
+      "sensitivity": "medium"
     },
     {
       "id": "app_server",
       "name": "Application Server",
-      "type": "compute"
+      "type": "compute",
+      "public": false,
+      "sensitivity": "medium"
     },
     {
       "id": "app_role",
       "name": "App Role",
-      "type": "identity"
+      "type": "identity",
+      "public": false,
+      "sensitivity": "high"
     },
     {
       "id": "sensitive_storage",
       "name": "Sensitive Storage",
-      "type": "storage"
+      "type": "storage",
+      "public": false,
+      "sensitivity": "critical"
     },
     {
       "id": "backup_storage",
       "name": "Backup Storage",
-      "type": "storage"
+      "type": "storage",
+      "public": false,
+      "sensitivity": "high"
     },
     {
       "id": "logging_service",
       "name": "Logging Service",
-      "type": "logging"
+      "type": "logging",
+      "public": false,
+      "sensitivity": "low"
     }
   ],
   "connections": [
