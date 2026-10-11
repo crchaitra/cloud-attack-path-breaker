@@ -1,0 +1,49 @@
+
+{
+  "resources": [
+    {
+      "id": "internet",
+      "name": "Internet",
+      "type": "entry_point"
+    },
+    {
+      "id": "web_server",
+      "name": "Web Server",
+      "type": "compute"
+    },
+    {
+      "id": "app_role",
+      "name": "App Role",
+      "type": "identity"
+    },
+    {
+      "id": "sensitive_storage",
+      "name": "Sensitive Storage",
+      "type": "storage"
+    }
+  ],
+  "connections": [
+    {
+      "source": "internet",
+      "target": "web_server",
+      "type": "network_access"
+    },
+    {
+      "source": "web_server",
+      "target": "app_role",
+      "type": "assume_role"
+    },
+    {
+      "source": "app_role",
+      "target": "sensitive_storage",
+      "type": "storage_access"
+    },
+    {
+      "source": "internet",
+      "target": "sensitive_storage",
+      "type": "direct_access"
+    }
+  ],
+  "entry_point": "internet",
+  "protected_asset": "sensitive_storage"
+}
