@@ -17,7 +17,6 @@ resource_ids = [resource["id"] for resource in resources]
 if len(resource_ids) != len(set(resource_ids)):
     raise ValueError("Duplicate resource IDs found.")
 
-# Validate entry point and protected asset
 if entry_point not in resource_ids:
     raise ValueError("Entry point does not exist in resources.")
 
@@ -34,14 +33,13 @@ for resource in resources:
         type=resource["type"]
     )
 
-# Validate connections and add edges
 for connection in connections:
     source = connection["source"]
     target = connection["target"]
 
     if source not in resource_ids or target not in resource_ids:
         raise ValueError(
-            f"Connection references an unknown resource: {source} -> {target}"
+            f"Unknown resource in connection: {source} -> {target}"
         )
 
     cloud.add_edge(
@@ -51,16 +49,12 @@ for connection in connections:
     )
 
 print("CLOUD ATTACK-PATH BREAKER")
-print("=" * 35)
+print("=" * 40)
 print("Configuration validation passed.")
 print(f"Resources: {cloud.number_of_nodes()}")
 print(f"Connections: {cloud.number_of_edges()}")
-print("\nCLOUD RESOURCES")
 
-for node, details in cloud.nodes(data=True):
-    print(f"- {details['name']} ({details['type']})")
-
-# Find all simple attack paths
+# Find all simple paths to the protected asset
 paths = list(
     nx.all_simple_paths(
         cloud,
@@ -69,12 +63,59 @@ paths = list(
     )
 )
 
+# Explainable prototype risk scoring
+def score_path(path):
+    score = 0
+    reasons = []
+
+    # Public entry point
+    if path[0] == entry_point:
+        score += 30
+        reasons.append("Starts at the external entry point (+30)")
+
+    # Identity and permission transitions
+    identity_steps = 0
+
+    for source, target in zip(path, path[1:]):
+        connection_type = cloud.edges[source, target]["type"]
+
+        if connection_type == "assume_role":
+            identity_steps += 1
+
+    if identity_steps:
+        points = min(identity_steps * 20, 40)
+        score += points
+        reasons.append(f"Identity permission transitions (+{points})")
+
+    # Sensitive destination
+    if path[-1] == protected_asset:
+        score += 30
+        reasons.append("Reaches sensitive storage (+30)")
+
+    return min(score, 100), reasons
+
+
 if paths:
     print(f"\nFound {len(paths)} attack path(s):")
 
-    for number, path in enumerate(paths, start=1):
+    scored_paths = []
+
+    for path in paths:
+        score, reasons = score_path(path)
+        scored_paths.append((score, path, reasons))
+
+    # Show highest-scoring paths first
+    scored_paths.sort(key=lambda item: item[0], reverse=True)
+
+    for number, (score, path, reasons) in enumerate(
+        scored_paths, start=1
+    ):
         names = [cloud.nodes[node]["name"] for node in path]
-        print(f"\nPath {number}:")
-        print(" -> ".join(names))
+
+        print(f"\nPath {number}: {' -> '.join(names)}")
+        print(f"Risk score: {score}/100")
+
+        for reason in reasons:
+            print(f"  - {reason}")
 else:
     print("\nNo path to the protected asset was found.")
