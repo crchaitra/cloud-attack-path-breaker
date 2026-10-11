@@ -1,7 +1,12 @@
 
 import unittest
 
-from main import build_graph, find_attack_paths, score_path
+from main import (
+    build_graph,
+    find_attack_paths,
+    score_path,
+    recommend_remediations,
+)
 
 
 class TestAttackPaths(unittest.TestCase):
@@ -73,10 +78,7 @@ class TestAttackPaths(unittest.TestCase):
             self.graph, "internet", "storage"
         )
 
-        self.assertIn(
-            ["internet", "storage"],
-            paths,
-        )
+        self.assertIn(["internet", "storage"], paths)
 
     def test_finds_multiple_attack_paths(self):
         """Check that both routes to storage are discovered."""
@@ -120,10 +122,33 @@ class TestAttackPaths(unittest.TestCase):
         )
 
         self.assertEqual(score, 55)
+
         self.assertIn(
             "Highest resource sensitivity: critical (+30)",
             reasons,
         )
+
+    def test_remediation_removes_direct_access(self):
+        """Check that remediation removes the direct attack path."""
+        recommendations, simulated_graph = recommend_remediations(
+            self.graph, "storage"
+        )
+
+        paths = find_attack_paths(
+            simulated_graph, "internet", "storage"
+        )
+
+        self.assertEqual(len(recommendations), 1)
+        self.assertEqual(len(paths), 1)
+        self.assertNotIn(["internet", "storage"], paths)
+
+    def test_remediation_preserves_original_graph(self):
+        """Check that remediation does not modify the original graph."""
+        original_edges = set(self.graph.edges())
+
+        recommend_remediations(self.graph, "storage")
+
+        self.assertEqual(set(self.graph.edges()), original_edges)
 
 
 if __name__ == "__main__":

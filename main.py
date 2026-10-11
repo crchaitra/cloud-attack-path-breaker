@@ -12,13 +12,13 @@ SENSITIVITY_POINTS = {
 
 
 def load_environment(file_path="cloud_environment.json"):
-    """Load the simulated cloud environment from a JSON file."""
+    """Load the simulated cloud environment."""
     with open(file_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def build_graph(environment):
-    """Validate the environment and build its directed graph."""
+    """Validate the environment and build the directed graph."""
     required_keys = {
         "resources",
         "connections",
@@ -97,7 +97,7 @@ def build_graph(environment):
 
 
 def find_attack_paths(cloud, entry_point, protected_asset):
-    """Return all simple paths from the entry point to the protected asset."""
+    """Find all simple paths to the protected asset."""
     if entry_point not in cloud:
         raise ValueError("Entry point does not exist in the graph.")
 
@@ -114,7 +114,7 @@ def find_attack_paths(cloud, entry_point, protected_asset):
 
 
 def score_path(cloud, path):
-    """Calculate a simple heuristic risk score for an attack path."""
+    """Calculate a simple illustrative risk score."""
     score = 0
     reasons = []
 
@@ -154,8 +154,42 @@ def score_path(cloud, path):
     return min(score, 100), reasons
 
 
+def recommend_remediations(cloud, protected_asset):
+    """Recommend and simulate restricting direct access to protected storage."""
+    if protected_asset not in cloud:
+        raise ValueError("Protected asset does not exist in the graph.")
+
+    # Copy the graph so the original environment is not changed.
+    simulated_graph = cloud.copy()
+    recommendations = []
+
+    direct_sources = list(
+        simulated_graph.predecessors(protected_asset)
+    )
+
+    for source in direct_sources:
+        edge_type = simulated_graph.edges[
+            source, protected_asset
+        ]["type"]
+
+        if edge_type == "direct_access":
+            recommendations.append({
+                "source": source,
+                "target": protected_asset,
+                "connection_type": edge_type,
+                "action": (
+                    f"Remove or restrict direct access from "
+                    f"{source} to {protected_asset}"
+                ),
+            })
+
+            simulated_graph.remove_edge(source, protected_asset)
+
+    return recommendations, simulated_graph
+
+
 def main():
-    """Run the Cloud Attack-Path Breaker command-line program."""
+    """Run the Cloud Attack-Path Breaker."""
     environment = load_environment()
     cloud = build_graph(environment)
 
@@ -177,10 +211,6 @@ def main():
 
     paths = find_attack_paths(cloud, entry_point, protected_asset)
 
-    if not paths:
-        print("\nNo path to the protected asset was found.")
-        return
-
     print(f"\nFound {len(paths)} attack path(s):")
 
     scored_paths = []
@@ -201,6 +231,56 @@ def main():
 
         for reason in reasons:
             print(f"  - {reason}")
+
+    # Recommend and simulate remediation.
+    print("\n" + "=" * 40)
+    print("REMEDIATION RECOMMENDATIONS")
+    print("=" * 40)
+
+    recommendations, simulated_graph = recommend_remediations(
+        cloud, protected_asset
+    )
+
+    if not recommendations:
+        print("No direct-access remediation recommendations found.")
+    else:
+        for number, recommendation in enumerate(
+            recommendations, start=1
+        ):
+            print(f"\nRecommendation {number}:")
+            print(f"  Action: {recommendation['action']}")
+            print(
+                f"  Connection: {recommendation['source']} -> "
+                f"{recommendation['target']}"
+            )
+
+    # Verify whether the simulated change removes attack paths.
+    remaining_paths = find_attack_paths(
+        simulated_graph, entry_point, protected_asset
+    )
+
+    print("\nSIMULATION RESULTS")
+    print("-" * 40)
+    print(f"Attack paths before remediation: {len(paths)}")
+    print(f"Attack paths after remediation: {len(remaining_paths)}")
+
+    if len(remaining_paths) < len(paths):
+        print("Result: The simulation reduced the number of attack paths.")
+    else:
+        print("Result: No reduction in attack paths was achieved.")
+
+    if remaining_paths:
+        print("\nRemaining attack paths:")
+        for path in remaining_paths:
+            names = [
+                simulated_graph.nodes[node]["name"]
+                for node in path
+            ]
+            print(f"- {' -> '.join(names)}")
+    else:
+        print("No attack paths to the protected asset remain.")
+
+    print("\nOriginal graph unchanged:", cloud.number_of_edges() == 7)
 
 
 if __name__ == "__main__":
