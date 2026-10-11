@@ -53,6 +53,12 @@ for connection in connections:
 print("CLOUD ATTACK-PATH BREAKER")
 print("=" * 35)
 print("Configuration validation passed.")
+print(f"Resources: {cloud.number_of_nodes()}")
+print(f"Connections: {cloud.number_of_edges()}")
+print("\nCLOUD RESOURCES")
+
+for node, details in cloud.nodes(data=True):
+    print(f"- {details['name']} ({details['type']})")
 
 # Find all simple attack paths
 paths = list(

@@ -12,6 +12,11 @@
       "type": "compute"
     },
     {
+      "id": "app_server",
+      "name": "Application Server",
+      "type": "compute"
+    },
+    {
       "id": "app_role",
       "name": "App Role",
       "type": "identity"
@@ -20,6 +25,16 @@
       "id": "sensitive_storage",
       "name": "Sensitive Storage",
       "type": "storage"
+    },
+    {
+      "id": "backup_storage",
+      "name": "Backup Storage",
+      "type": "storage"
+    },
+    {
+      "id": "logging_service",
+      "name": "Logging Service",
+      "type": "logging"
     }
   ],
   "connections": [
@@ -30,6 +45,11 @@
     },
     {
       "source": "web_server",
+      "target": "app_server",
+      "type": "network_access"
+    },
+    {
+      "source": "app_server",
       "target": "app_role",
       "type": "assume_role"
     },
@@ -42,6 +62,16 @@
       "source": "internet",
       "target": "sensitive_storage",
       "type": "direct_access"
+    },
+    {
+      "source": "app_role",
+      "target": "backup_storage",
+      "type": "storage_access"
+    },
+    {
+      "source": "app_server",
+      "target": "logging_service",
+      "type": "log_access"
     }
   ],
   "entry_point": "internet",
