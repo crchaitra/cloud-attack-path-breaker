@@ -6,6 +6,7 @@ from main import (
     find_attack_paths,
     score_path,
     recommend_remediations,
+    legitimate_access_preserved,
 )
 
 
@@ -42,6 +43,13 @@ class TestAttackPaths(unittest.TestCase):
                     "public": False,
                     "sensitivity": "high",
                 },
+                {
+                    "id": "logging",
+                    "name": "Logging Service",
+                    "type": "logging",
+                    "public": False,
+                    "sensitivity": "low",
+                },
             ],
             "connections": [
                 {
@@ -64,9 +72,15 @@ class TestAttackPaths(unittest.TestCase):
                     "target": "backup",
                     "type": "storage_access",
                 },
+                {
+                    "source": "server",
+                    "target": "logging",
+                    "type": "log_access",
+                },
             ],
             "entry_point": "internet",
             "protected_asset": "storage",
+            "legitimate_paths": [["server", "logging"]],
         }
 
         self.graph = build_graph(self.environment)
@@ -84,13 +98,11 @@ class TestAttackPaths(unittest.TestCase):
         self.assertEqual(len(paths), 2)
 
     def test_returns_no_path_when_unreachable(self):
-        graph = build_graph(self.environment)
+        graph = self.graph.copy()
         graph.remove_edge("internet", "storage")
         graph.remove_edge("server", "storage")
 
-        paths = find_attack_paths(
-            graph, "internet", "storage"
-        )
+        paths = find_attack_paths(graph, "internet", "storage")
         self.assertEqual(paths, [])
 
     def test_invalid_configuration_is_rejected(self):
@@ -119,7 +131,10 @@ class TestAttackPaths(unittest.TestCase):
     def test_remediation_removes_direct_access(self):
         recommendations, simulated_graph, original_paths = (
             recommend_remediations(
-                self.graph, "internet", "storage"
+                self.graph,
+                "internet",
+                "storage",
+                self.environment["legitimate_paths"],
             )
         )
 
@@ -128,13 +143,9 @@ class TestAttackPaths(unittest.TestCase):
         )
 
         self.assertEqual(len(original_paths), 2)
-        self.assertEqual(len(recommendations), 1)
+        self.assertGreaterEqual(len(recommendations), 1)
         self.assertEqual(len(remaining_paths), 1)
-        self.assertNotIn(
-            ["internet", "storage"],
-            remaining_paths,
-        )
-
+        self.assertNotIn(["internet", "storage"], remaining_paths)
         self.assertEqual(
             recommendations[0]["connection_type"],
             "direct_access",
@@ -147,17 +158,58 @@ class TestAttackPaths(unittest.TestCase):
         )
 
         recommend_remediations(
-            self.graph, "internet", "storage"
+            self.graph,
+            "internet",
+            "storage",
+            self.environment["legitimate_paths"],
         )
 
         self.assertEqual(set(self.graph.edges()), original_edges)
         self.assertEqual(
-            find_attack_paths(
-                self.graph, "internet", "storage"
-            ),
+            find_attack_paths(self.graph, "internet", "storage"),
             original_paths,
+        )
+
+    def test_remediation_preserves_legitimate_access(self):
+        recommendations, simulated_graph, _ = recommend_remediations(
+            self.graph,
+            "internet",
+            "storage",
+            self.environment["legitimate_paths"],
+        )
+
+        self.assertTrue(recommendations)
+        self.assertTrue(
+            legitimate_access_preserved(
+                self.graph,
+                simulated_graph,
+                self.environment["legitimate_paths"],
+            )
+        )
+        self.assertTrue(simulated_graph.has_edge("server", "logging"))
+
+    def test_remediation_options_are_ranked(self):
+        recommendations, _, _ = recommend_remediations(
+            self.graph,
+            "internet",
+            "storage",
+            self.environment["legitimate_paths"],
+        )
+
+        self.assertTrue(recommendations)
+
+        ranks = [item["rank"] for item in recommendations]
+        self.assertEqual(ranks, list(range(1, len(ranks) + 1)))
+
+        eliminated_counts = [
+            item["paths_eliminated"] for item in recommendations
+        ]
+        self.assertEqual(
+            eliminated_counts,
+            sorted(eliminated_counts, reverse=True),
         )
 
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

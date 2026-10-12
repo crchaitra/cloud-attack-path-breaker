@@ -89,5 +89,8 @@
     }
   ],
   "entry_point": "internet",
-  "protected_asset": "sensitive_storage"
+  "protected_asset": "sensitive_storage",
+  "legitimate_paths": [
+    ["app_server", "logging_service"]
+  ]
 }
