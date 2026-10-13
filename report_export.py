@@ -6,11 +6,15 @@ from datetime import datetime, timezone
 def build_export_report(
     security_report,
     remediation_result=None,
+    misconfiguration_findings=None,
 ):
     """
-    Combine the security assessment and optional remediation
-    results into a JSON-serializable export report.
+    Combine the security assessment, optional remediation results,
+    and optional misconfiguration findings into an export report.
     """
+
+    if misconfiguration_findings is None:
+        misconfiguration_findings = []
 
     report = {
         "report_type": security_report["report_type"],
@@ -25,6 +29,10 @@ def build_export_report(
         ],
         "attack_paths": security_report["attack_paths"],
         "risk_score_note": security_report["risk_score_note"],
+        "misconfiguration_findings": misconfiguration_findings,
+        "misconfiguration_finding_count": len(
+            misconfiguration_findings
+        ),
         "remediation": None,
     }
 

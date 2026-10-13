@@ -88,8 +88,7 @@ try:
                 )
     else:
         st.success(
-            "No misconfigurations were detected by the "
-            "current rules."
+            "No misconfigurations were detected by the current rules."
         )
 
     st.caption(
@@ -182,14 +181,12 @@ try:
             before_col.metric(
                 "Attack paths before", len(paths_before)
             )
-
             after_col.metric(
                 "Attack paths after",
                 len(paths_after),
                 delta=len(paths_after) - len(paths_before),
                 delta_color="inverse",
             )
-
             change_col.metric(
                 "Connections removed",
                 remediation_result["removals_count"],
@@ -216,7 +213,6 @@ try:
                     )
 
             st.subheader("Compare Network Maps")
-
             show_before_after_maps(
                 original_graph=cloud,
                 remediated_graph=simulated_graph,
@@ -227,17 +223,18 @@ try:
     except ValueError as error:
         st.error(f"Remediation validation failed: {error}")
 
-    # JSON security report export
+    # Day 27: Export the full assessment, including misconfigurations.
     st.divider()
     st.header("📄 Export Security Assessment")
     st.write(
-        "Download the assessment and, when available, the "
+        "Download the assessment, misconfiguration findings, and "
         "simulated remediation results as a JSON report."
     )
 
     export_report = build_export_report(
         report,
         remediation_result=remediation_result,
+        misconfiguration_findings=findings,
     )
 
     report_json = report_to_json(export_report)
