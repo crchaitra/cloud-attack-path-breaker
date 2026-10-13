@@ -52,31 +52,16 @@ class TestAttackPaths(unittest.TestCase):
                 },
             ],
             "connections": [
-                {
-                    "source": "internet",
-                    "target": "server",
-                    "type": "network_access",
-                },
-                {
-                    "source": "server",
-                    "target": "storage",
-                    "type": "storage_access",
-                },
-                {
-                    "source": "internet",
-                    "target": "storage",
-                    "type": "direct_access",
-                },
-                {
-                    "source": "server",
-                    "target": "backup",
-                    "type": "storage_access",
-                },
-                {
-                    "source": "server",
-                    "target": "logging",
-                    "type": "log_access",
-                },
+                {"source": "internet", "target": "server",
+                 "type": "network_access"},
+                {"source": "server", "target": "storage",
+                 "type": "storage_access"},
+                {"source": "internet", "target": "storage",
+                 "type": "direct_access"},
+                {"source": "server", "target": "backup",
+                 "type": "storage_access"},
+                {"source": "server", "target": "logging",
+                 "type": "log_access"},
             ],
             "entry_point": "internet",
             "protected_asset": "storage",
@@ -88,26 +73,20 @@ class TestAttackPaths(unittest.TestCase):
     # ATTACK PATH TESTS
 
     def test_finds_attack_path(self):
-        paths = find_attack_paths(
-            self.graph, "internet", "storage"
-        )
+        paths = find_attack_paths(self.graph, "internet", "storage")
         self.assertIn(["internet", "storage"], paths)
 
     def test_finds_multiple_attack_paths(self):
-        paths = find_attack_paths(
-            self.graph, "internet", "storage"
-        )
+        paths = find_attack_paths(self.graph, "internet", "storage")
         self.assertEqual(len(paths), 2)
 
     def test_returns_no_path_when_unreachable(self):
         graph = self.graph.copy()
         graph.remove_edge("internet", "storage")
         graph.remove_edge("server", "storage")
-
-        paths = find_attack_paths(
-            graph, "internet", "storage"
+        self.assertEqual(
+            find_attack_paths(graph, "internet", "storage"), []
         )
-        self.assertEqual(paths, [])
 
     # CONFIGURATION VALIDATION TESTS
 
@@ -119,7 +98,6 @@ class TestAttackPaths(unittest.TestCase):
                 + [self.environment["resources"][0]]
             ),
         }
-
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -131,16 +109,12 @@ class TestAttackPaths(unittest.TestCase):
         invalid_environment = {
             **self.environment,
             "resources": [
-                {
-                    **self.environment["resources"][0],
-                    "id": 123,
-                }
+                {**self.environment["resources"][0], "id": 123}
             ],
             "connections": [],
             "entry_point": 123,
             "protected_asset": 123,
         }
-
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -148,27 +122,84 @@ class TestAttackPaths(unittest.TestCase):
         invalid_environment = {
             **self.environment,
             "resources": [
-                {
-                    **self.environment["resources"][0],
-                    "id": "",
-                }
+                {**self.environment["resources"][0], "id": ""}
             ],
             "connections": [],
             "entry_point": "",
             "protected_asset": "",
         }
-
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
     def test_rejects_connection_with_missing_endpoint(self):
         invalid_environment = {
             **self.environment,
-            "connections": [
-                {"source": "internet"}
-            ],
+            "connections": [{"source": "internet"}],
         }
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
 
+    # DAY 23: RESOURCE PROPERTY VALIDATION
+
+    def test_rejects_non_boolean_public_property(self):
+        invalid_environment = {
+            **self.environment,
+            "resources": [
+                {
+                    **self.environment["resources"][0],
+                    "public": "yes",
+                }
+            ],
+            "connections": [],
+            "entry_point": "internet",
+            "protected_asset": "internet",
+        }
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_invalid_sensitivity(self):
+        invalid_environment = {
+            **self.environment,
+            "resources": [
+                {
+                    **self.environment["resources"][0],
+                    "sensitivity": "super-high",
+                }
+            ],
+            "connections": [],
+            "entry_point": "internet",
+            "protected_asset": "internet",
+        }
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_missing_resource_name(self):
+        resource = dict(self.environment["resources"][0])
+        resource.pop("name")
+
+        invalid_environment = {
+            **self.environment,
+            "resources": [resource],
+            "connections": [],
+            "entry_point": "internet",
+            "protected_asset": "internet",
+        }
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_empty_resource_name(self):
+        invalid_environment = {
+            **self.environment,
+            "resources": [
+                {
+                    **self.environment["resources"][0],
+                    "name": "   ",
+                }
+            ],
+            "connections": [],
+            "entry_point": "internet",
+            "protected_asset": "internet",
+        }
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -178,36 +209,29 @@ class TestAttackPaths(unittest.TestCase):
         score, reasons = score_path(
             self.graph, ["internet", "storage"]
         )
-
         self.assertEqual(score, 55)
         self.assertIn(
-            "Highest resource sensitivity: critical (+30)",
-            reasons,
+            "Highest resource sensitivity: critical (+30)", reasons
         )
 
     def test_score_explains_public_entry_point(self):
         score, reasons = score_path(
             self.graph, ["internet", "storage"]
         )
-
         self.assertEqual(score, 55)
         self.assertIn("Public entry point (+25)", reasons)
 
     def test_longer_path_receives_extra_points(self):
         score, reasons = score_path(
-            self.graph,
-            ["internet", "server", "storage"],
+            self.graph, ["internet", "server", "storage"]
         )
-
         self.assertEqual(score, 65)
         self.assertIn(
-            "Multiple steps in attack path (+10)",
-            reasons,
+            "Multiple steps in attack path (+10)", reasons
         )
 
     def test_empty_path_returns_zero(self):
         score, reasons = score_path(self.graph, [])
-
         self.assertEqual(score, 0)
         self.assertIn("No resources in path", reasons)
 
@@ -222,7 +246,6 @@ class TestAttackPaths(unittest.TestCase):
                 self.environment["legitimate_paths"],
             )
         )
-
         remaining_paths = find_attack_paths(
             simulated_graph, "internet", "storage"
         )
@@ -230,12 +253,9 @@ class TestAttackPaths(unittest.TestCase):
         self.assertEqual(len(original_paths), 2)
         self.assertGreaterEqual(len(recommendations), 1)
         self.assertEqual(len(remaining_paths), 1)
-        self.assertNotIn(
-            ["internet", "storage"], remaining_paths
-        )
+        self.assertNotIn(["internet", "storage"], remaining_paths)
         self.assertEqual(
-            recommendations[0]["connection_type"],
-            "direct_access",
+            recommendations[0]["connection_type"], "direct_access"
         )
 
     def test_remediation_preserves_original_graph(self):
@@ -253,20 +273,16 @@ class TestAttackPaths(unittest.TestCase):
 
         self.assertEqual(set(self.graph.edges()), original_edges)
         self.assertEqual(
-            find_attack_paths(
-                self.graph, "internet", "storage"
-            ),
+            find_attack_paths(self.graph, "internet", "storage"),
             original_paths,
         )
 
     def test_remediation_preserves_legitimate_access(self):
-        recommendations, simulated_graph, _ = (
-            recommend_remediations(
-                self.graph,
-                "internet",
-                "storage",
-                self.environment["legitimate_paths"],
-            )
+        recommendations, simulated_graph, _ = recommend_remediations(
+            self.graph,
+            "internet",
+            "storage",
+            self.environment["legitimate_paths"],
         )
 
         self.assertTrue(recommendations)
@@ -277,9 +293,7 @@ class TestAttackPaths(unittest.TestCase):
                 self.environment["legitimate_paths"],
             )
         )
-        self.assertTrue(
-            simulated_graph.has_edge("server", "logging")
-        )
+        self.assertTrue(simulated_graph.has_edge("server", "logging"))
 
     def test_remediation_options_are_ranked(self):
         recommendations, _, _ = recommend_remediations(
@@ -290,15 +304,11 @@ class TestAttackPaths(unittest.TestCase):
         )
 
         self.assertTrue(recommendations)
-
         ranks = [item["rank"] for item in recommendations]
-        self.assertEqual(
-            ranks, list(range(1, len(ranks) + 1))
-        )
+        self.assertEqual(ranks, list(range(1, len(ranks) + 1)))
 
         eliminated_counts = [
-            item["paths_eliminated"]
-            for item in recommendations
+            item["paths_eliminated"] for item in recommendations
         ]
         self.assertEqual(
             eliminated_counts,

@@ -5,6 +5,9 @@ from pathlib import Path
 import networkx as nx
 
 
+VALID_SENSITIVITIES = {"low", "medium", "high", "critical"}
+
+
 def load_environment(file_path="cloud_environment.json"):
     """Load the simulated cloud environment."""
     path = Path(file_path)
@@ -48,7 +51,7 @@ def build_graph(environment):
     graph = nx.DiGraph()
     resource_ids = set()
 
-    # Validate and add resources.
+    # Validate resource properties.
     for resource in resources:
         if not isinstance(resource, dict):
             raise ValueError("Every resource must be an object.")
@@ -63,10 +66,37 @@ def build_graph(environment):
         if resource_id in resource_ids:
             raise ValueError(f"Duplicate resource ID: {resource_id}")
 
+        name = resource.get("name")
+
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(
+                f"Resource '{resource_id}' must have a non-empty name."
+            )
+
+        if not isinstance(resource.get("type"), str) or not resource["type"].strip():
+            raise ValueError(
+                f"Resource '{resource_id}' must have a non-empty type."
+            )
+
+        public = resource.get("public")
+
+        if not isinstance(public, bool):
+            raise ValueError(
+                f"Resource '{resource_id}' must have a Boolean public value."
+            )
+
+        sensitivity = resource.get("sensitivity")
+
+        if sensitivity not in VALID_SENSITIVITIES:
+            raise ValueError(
+                f"Resource '{resource_id}' has invalid sensitivity "
+                f"'{sensitivity}'. Choose low, medium, high, or critical."
+            )
+
         resource_ids.add(resource_id)
         graph.add_node(resource_id, **resource)
 
-    # Validate and add connections.
+    # Validate connections.
     for connection in connections:
         if not isinstance(connection, dict):
             raise ValueError("Every connection must be an object.")
@@ -141,7 +171,7 @@ def build_graph(environment):
 
 
 def find_attack_paths(cloud, entry_point, protected_asset):
-    """Find all simple paths from the entry point to the protected asset."""
+    """Find all simple paths from entry point to protected asset."""
     if entry_point not in cloud or protected_asset not in cloud:
         return []
 
@@ -209,19 +239,13 @@ def recommend_remediations(
     protected_asset,
     legitimate_paths=None,
 ):
-    """
-    Compare single-edge removals, rejecting those that break required access.
-
-    Return:
-        recommendations, best_simulated_graph, original_attack_paths
-    """
+    """Rank safe single-edge remediation options."""
     if legitimate_paths is None:
         legitimate_paths = []
 
     original_paths = find_attack_paths(
         cloud, entry_point, protected_asset
     )
-
     candidates = []
 
     for source, target, attributes in list(cloud.edges(data=True)):
@@ -241,17 +265,15 @@ def recommend_remediations(
         if not access_preserved or eliminated_count <= 0:
             continue
 
-        candidates.append(
-            {
-                "source": source,
-                "target": target,
-                "connection_type": attributes.get("type", "unknown"),
-                "paths_eliminated": eliminated_count,
-                "paths_remaining": len(remaining_paths),
-                "legitimate_access_preserved": True,
-                "graph": simulated_graph,
-            }
-        )
+        candidates.append({
+            "source": source,
+            "target": target,
+            "connection_type": attributes.get("type", "unknown"),
+            "paths_eliminated": eliminated_count,
+            "paths_remaining": len(remaining_paths),
+            "legitimate_access_preserved": True,
+            "graph": simulated_graph,
+        })
 
     candidates.sort(
         key=lambda item: (
@@ -266,28 +288,24 @@ def recommend_remediations(
     recommendations = []
 
     for rank, candidate in enumerate(candidates, start=1):
-        recommendations.append(
-            {
-                "rank": rank,
-                "source": candidate["source"],
-                "target": candidate["target"],
-                "connection_type": candidate["connection_type"],
-                "paths_eliminated": candidate["paths_eliminated"],
-                "paths_remaining": candidate["paths_remaining"],
-                "legitimate_access_preserved": candidate[
-                    "legitimate_access_preserved"
-                ],
-                "action": (
-                    f"Review and restrict the connection from "
-                    f"{candidate['source']} to {candidate['target']}"
-                ),
-                "reason": (
-                    f"Eliminates {candidate['paths_eliminated']} attack "
-                    f"path(s), leaves {candidate['paths_remaining']} "
-                    f"remaining, and preserves all defined legitimate paths."
-                ),
-            }
-        )
+        recommendations.append({
+            "rank": rank,
+            "source": candidate["source"],
+            "target": candidate["target"],
+            "connection_type": candidate["connection_type"],
+            "paths_eliminated": candidate["paths_eliminated"],
+            "paths_remaining": candidate["paths_remaining"],
+            "legitimate_access_preserved": True,
+            "action": (
+                f"Review and restrict the connection from "
+                f"{candidate['source']} to {candidate['target']}"
+            ),
+            "reason": (
+                f"Eliminates {candidate['paths_eliminated']} attack "
+                f"path(s), leaves {candidate['paths_remaining']} "
+                f"remaining, and preserves all defined legitimate paths."
+            ),
+        })
 
     if not candidates:
         return recommendations, cloud.copy(), original_paths
@@ -309,7 +327,6 @@ def main():
     legitimate_paths = environment.get("legitimate_paths", [])
 
     original_edges = set(cloud.edges())
-
     attack_paths = find_attack_paths(
         cloud, entry_point, protected_asset
     )
@@ -319,12 +336,10 @@ def main():
     print(f"Connections: {cloud.number_of_edges()}")
     print(f"Entry point: {entry_point}")
     print(f"Protected asset: {protected_asset}")
-
     print(f"\n=== Attack Paths: {len(attack_paths)} ===")
 
     for index, path in enumerate(attack_paths, start=1):
         score, reasons = score_path(cloud, path)
-
         print(f"\nPath {index}: {' -> '.join(path)}")
         print(f"Risk score: {score}/100")
 
