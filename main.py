@@ -73,7 +73,12 @@ def build_graph(environment):
                 f"Resource '{resource_id}' must have a non-empty name."
             )
 
-        if not isinstance(resource.get("type"), str) or not resource["type"].strip():
+        resource_type = resource.get("type")
+
+        if (
+            not isinstance(resource_type, str)
+            or not resource_type.strip()
+        ):
             raise ValueError(
                 f"Resource '{resource_id}' must have a non-empty type."
             )
@@ -87,22 +92,26 @@ def build_graph(environment):
 
         sensitivity = resource.get("sensitivity")
 
-        if sensitivity not in VALID_SENSITIVITIES:
+        if (
+            not isinstance(sensitivity, str)
+            or sensitivity not in VALID_SENSITIVITIES
+        ):
             raise ValueError(
-                f"Resource '{resource_id}' has invalid sensitivity "
-                f"'{sensitivity}'. Choose low, medium, high, or critical."
+                f"Resource '{resource_id}' has invalid sensitivity. "
+                "Choose low, medium, high, or critical."
             )
 
         resource_ids.add(resource_id)
         graph.add_node(resource_id, **resource)
 
-    # Validate connections.
+    # Day 24: Validate connection properties.
     for connection in connections:
         if not isinstance(connection, dict):
             raise ValueError("Every connection must be an object.")
 
         source = connection.get("source")
         target = connection.get("target")
+        connection_type = connection.get("type")
 
         if not isinstance(source, str) or not source.strip():
             raise ValueError(
@@ -118,6 +127,15 @@ def build_graph(environment):
             raise ValueError(
                 f"Connection references an unknown resource: "
                 f"{source} -> {target}"
+            )
+
+        if (
+            not isinstance(connection_type, str)
+            or not connection_type.strip()
+        ):
+            raise ValueError(
+                f"Connection '{source} -> {target}' must have a "
+                "non-empty string type."
             )
 
         if graph.has_edge(source, target):
@@ -137,7 +155,10 @@ def build_graph(environment):
     entry_point = environment.get("entry_point")
     protected_asset = environment.get("protected_asset")
 
-    if not isinstance(entry_point, str) or entry_point not in resource_ids:
+    if (
+        not isinstance(entry_point, str)
+        or entry_point not in resource_ids
+    ):
         raise ValueError("Entry point is missing or does not exist.")
 
     if (
@@ -155,7 +176,8 @@ def build_graph(environment):
     for path in legitimate_paths:
         if not isinstance(path, list) or len(path) < 2:
             raise ValueError(
-                "Every legitimate path must contain at least two resource IDs."
+                "Every legitimate path must contain at least "
+                "two resource IDs."
             )
 
         if any(
@@ -163,8 +185,8 @@ def build_graph(environment):
             for node in path
         ):
             raise ValueError(
-                f"Legitimate path contains an unknown or invalid resource: "
-                f"{path}"
+                f"Legitimate path contains an unknown or invalid "
+                f"resource: {path}"
             )
 
     return graph

@@ -52,16 +52,31 @@ class TestAttackPaths(unittest.TestCase):
                 },
             ],
             "connections": [
-                {"source": "internet", "target": "server",
-                 "type": "network_access"},
-                {"source": "server", "target": "storage",
-                 "type": "storage_access"},
-                {"source": "internet", "target": "storage",
-                 "type": "direct_access"},
-                {"source": "server", "target": "backup",
-                 "type": "storage_access"},
-                {"source": "server", "target": "logging",
-                 "type": "log_access"},
+                {
+                    "source": "internet",
+                    "target": "server",
+                    "type": "network_access",
+                },
+                {
+                    "source": "server",
+                    "target": "storage",
+                    "type": "storage_access",
+                },
+                {
+                    "source": "internet",
+                    "target": "storage",
+                    "type": "direct_access",
+                },
+                {
+                    "source": "server",
+                    "target": "backup",
+                    "type": "storage_access",
+                },
+                {
+                    "source": "server",
+                    "target": "logging",
+                    "type": "log_access",
+                },
             ],
             "entry_point": "internet",
             "protected_asset": "storage",
@@ -84,6 +99,7 @@ class TestAttackPaths(unittest.TestCase):
         graph = self.graph.copy()
         graph.remove_edge("internet", "storage")
         graph.remove_edge("server", "storage")
+
         self.assertEqual(
             find_attack_paths(graph, "internet", "storage"), []
         )
@@ -98,6 +114,7 @@ class TestAttackPaths(unittest.TestCase):
                 + [self.environment["resources"][0]]
             ),
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -115,6 +132,7 @@ class TestAttackPaths(unittest.TestCase):
             "entry_point": 123,
             "protected_asset": 123,
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -128,6 +146,7 @@ class TestAttackPaths(unittest.TestCase):
             "entry_point": "",
             "protected_asset": "",
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -136,6 +155,7 @@ class TestAttackPaths(unittest.TestCase):
             **self.environment,
             "connections": [{"source": "internet"}],
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -145,15 +165,13 @@ class TestAttackPaths(unittest.TestCase):
         invalid_environment = {
             **self.environment,
             "resources": [
-                {
-                    **self.environment["resources"][0],
-                    "public": "yes",
-                }
+                {**self.environment["resources"][0], "public": "yes"}
             ],
             "connections": [],
             "entry_point": "internet",
             "protected_asset": "internet",
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -170,6 +188,7 @@ class TestAttackPaths(unittest.TestCase):
             "entry_point": "internet",
             "protected_asset": "internet",
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -184,6 +203,7 @@ class TestAttackPaths(unittest.TestCase):
             "entry_point": "internet",
             "protected_asset": "internet",
         }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -191,15 +211,106 @@ class TestAttackPaths(unittest.TestCase):
         invalid_environment = {
             **self.environment,
             "resources": [
-                {
-                    **self.environment["resources"][0],
-                    "name": "   ",
-                }
+                {**self.environment["resources"][0], "name": "   "}
             ],
             "connections": [],
             "entry_point": "internet",
             "protected_asset": "internet",
         }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    # DAY 24: CONNECTION VALIDATION
+
+    def test_rejects_non_dictionary_connection(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": ["internet -> server"],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_missing_connection_type(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": [
+                {"source": "internet", "target": "server"}
+            ],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_empty_connection_type(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": [
+                {
+                    "source": "internet",
+                    "target": "server",
+                    "type": "   ",
+                }
+            ],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_non_string_connection_type(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": [
+                {
+                    "source": "internet",
+                    "target": "server",
+                    "type": 123,
+                }
+            ],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_empty_connection_source(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": [
+                {
+                    "source": "",
+                    "target": "server",
+                    "type": "network_access",
+                }
+            ],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_empty_connection_target(self):
+        invalid_environment = {
+            **self.environment,
+            "connections": [
+                {
+                    "source": "internet",
+                    "target": " ",
+                    "type": "network_access",
+                }
+            ],
+        }
+
+        with self.assertRaises(ValueError):
+            build_graph(invalid_environment)
+
+    def test_rejects_duplicate_connection(self):
+        duplicate = dict(self.environment["connections"][0])
+
+        invalid_environment = {
+            **self.environment,
+            "connections": self.environment["connections"] + [duplicate],
+        }
+
         with self.assertRaises(ValueError):
             build_graph(invalid_environment)
 
@@ -209,6 +320,7 @@ class TestAttackPaths(unittest.TestCase):
         score, reasons = score_path(
             self.graph, ["internet", "storage"]
         )
+
         self.assertEqual(score, 55)
         self.assertIn(
             "Highest resource sensitivity: critical (+30)", reasons
@@ -218,6 +330,7 @@ class TestAttackPaths(unittest.TestCase):
         score, reasons = score_path(
             self.graph, ["internet", "storage"]
         )
+
         self.assertEqual(score, 55)
         self.assertIn("Public entry point (+25)", reasons)
 
@@ -225,6 +338,7 @@ class TestAttackPaths(unittest.TestCase):
         score, reasons = score_path(
             self.graph, ["internet", "server", "storage"]
         )
+
         self.assertEqual(score, 65)
         self.assertIn(
             "Multiple steps in attack path (+10)", reasons
@@ -232,6 +346,7 @@ class TestAttackPaths(unittest.TestCase):
 
     def test_empty_path_returns_zero(self):
         score, reasons = score_path(self.graph, [])
+
         self.assertEqual(score, 0)
         self.assertIn("No resources in path", reasons)
 
@@ -246,6 +361,7 @@ class TestAttackPaths(unittest.TestCase):
                 self.environment["legitimate_paths"],
             )
         )
+
         remaining_paths = find_attack_paths(
             simulated_graph, "internet", "storage"
         )
