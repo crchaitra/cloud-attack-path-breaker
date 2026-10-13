@@ -62,14 +62,14 @@ python -m pytest -v
 
 ![Tests](https://img.shields.io/badge/Tests-58%20passed-2EA44F?style=for-the-badge)
 
-Sample results
+Sample results:
 The included environment has 7 resources and 7 connections. The tool finds 2 attack paths to the protected storage resource.
 In the multi-connection remediation simulation, removing 2 connections reduces the discovered attack paths from 2 to 0, while preserving the configured legitimate access.
 
-Limitations
+Limitations:
 This is a local simulation, not a live cloud scanner. It doesn't connect to or modify AWS, Azure, or Google Cloud resources. The risk scores are based on simple rules I defined for the project, and the misconfiguration checks only cover the cases I've implemented.
 
-Why I built this
+Why I built this:
 I wanted to work on something practical in cybersecurity instead of just studying the concepts. This project gave me a way to experiment with attack paths, graph analysis, and remediation, and see how the network changes when connections are removed.
 
 -Author
