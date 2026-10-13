@@ -1,127 +1,82 @@
 # 🛡️ Cloud Attack-Path Breaker
 
-A Python-based cloud security simulation tool that discovers potential attack paths, evaluates illustrative risk scores, identifies risky resource configurations, and simulates remediation strategies to protect sensitive cloud assets.
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit" />
+  <img src="https://img.shields.io/badge/NetworkX-306998?style=for-the-badge" alt="NetworkX" />
+  <img src="https://img.shields.io/badge/Cybersecurity-00C853?style=for-the-badge" alt="Cybersecurity" />
+</p>
 
-## 🚀 Project Overview
+A Python project that looks at how an attacker could move through a cloud environment and reach sensitive data. It finds possible attack paths and lets me test ways to block them without breaking the legitimate access defined in the environment.
 
-Cloud environments contain interconnected resources, and insecure connections can create paths that attackers could potentially exploit.
+The project runs locally using a sample environment, so no cloud account is needed.
 
-**Cloud Attack-Path Breaker** models a cloud environment as a directed graph to identify paths from an entry point to a protected asset. It evaluates discovered paths, recommends connection removals, and compares the original environment with a simulated remediated environment.
+What it does
+- Finds paths from an entry point to a protected resource.
+- Assigns risk scores to discovered paths.
+- Checks for a few common risky resource configurations.
+- Suggests connections that could be removed.
+- Simulates removing multiple connections and checks whether legitimate access is preserved.
+- Shows network maps before and after remediation.
+- Exports the results as a JSON report.
 
-This project runs locally using a sample cloud environment. It does not connect to or modify a real cloud account.
-
-## ✨ Features
-
-- **Attack-Path Discovery:** Finds possible routes from an entry point to a protected asset.
-- **Risk Scoring:** Assigns illustrative risk scores and explains the contributing factors.
-- **Misconfiguration Detection:** Checks for selected risky resource configurations using rule-based checks.
-- **Remediation Recommendations:** Suggests connections that could be removed to reduce attack paths.
-- **Multi-Connection Remediation:** Simulates removing multiple connections while preserving configured legitimate access.
-- **Before-and-After Visualization:** Compares network graphs before and after simulated remediation.
-- **Residual Exposure Analysis:** Examines remaining paths and reachable sensitive resources.
-- **Security Report Export:** Exports assessment results, misconfiguration findings, and remediation details as JSON.
-- **Automated Tests:** Includes tests for core functionality and validation.
-
-## 🧰 Technology Stack
-
+Built with
 - Python
 - NetworkX
 - Streamlit
 - Matplotlib
 - Pytest
-- JSON
 
-## ⚙️ Getting Started
-
-### Prerequisites
-
-Install Python and Git.
-
-### 1. Clone the repository
+Run locally
+1. Clone the repository**
 
 ```bash
 git clone https://github.com/crchaitra/cloud-attack-path-breaker.git
 cd cloud-attack-path-breaker
 ```
 
-### 2. Create a virtual environment
-
-**Windows:**
+2. Create and activate a virtual environment**
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### 3. Install dependencies
-
-Install the project's required Python packages:
+3. Install the dependencies**
 
 ```bash
 python -m pip install streamlit networkx matplotlib pytest
 ```
 
-### 4. Run the dashboard
+4. Start the dashboard**
 
 ```bash
 python -m streamlit run app.py
 ```
 
-Streamlit will provide a local URL to open the dashboard in your browser.
-
-### 5. Run the tests
+5. Run the tests**
 
 ```bash
 python -m pytest -v
 ```
 
-## 🔍 How It Works
+![Tests](https://img.shields.io/badge/Tests-58%20passed-2EA44F?style=for-the-badge)
 
-1. Loads and validates a sample cloud environment from JSON.
-2. Builds a directed graph representing resources and their connections.
-3. Discovers paths between the configured entry point and protected asset.
-4. Calculates illustrative risk scores for discovered paths.
-5. checks selected resource properties for potential misconfigurations.
-6. Evaluates remediation options while checking configured legitimate access.
-7. Simulates the proposed changes and compares the resulting graph.
-8. Exports the security assessment as a JSON report.
+Sample results
+The included environment has 7 resources and 7 connections. The tool finds 2 attack paths to the protected storage resource.
+In the multi-connection remediation simulation, removing 2 connections reduces the discovered attack paths from 2 to 0, while preserving the configured legitimate access.
 
-## 📊 Example Results
+Limitations
+This is a local simulation, not a live cloud scanner. It doesn't connect to or modify AWS, Azure, or Google Cloud resources. The risk scores are based on simple rules I defined for the project, and the misconfiguration checks only cover the cases I've implemented.
 
-In the included sample environment:
+Why I built this
+I wanted to work on something practical in cybersecurity instead of just studying the concepts. This project gave me a way to experiment with attack paths, graph analysis, and remediation, and see how the network changes when connections are removed.
 
-- Resources: 7
-- Connections: 7
-- Discovered attack paths: 2
-- Attack paths after the demonstrated multi-connection remediation: 0
-- Connections removed in that simulation: 2
+-Author
+Chaitra CR · [GitHub](https://github.com/crchaitra)
 
-These are results from the sample configuration, not measurements of a real cloud deployment.
+---
 
-## 🔐 Security and Limitations
-
-- This is a local simulation; it does not connect to AWS, Azure, or Google Cloud.
-- Remediation does not modify real infrastructure.
-- Risk scores are illustrative project heuristics, not validated real-world risk ratings.
-- Misconfiguration checks cover only the rules implemented in this project.
-- Results are intended for educational and portfolio demonstration purposes, not as a complete cloud security audit.
-
-## 🧪 Testing
-
-Run the automated test suite with:
-
-```bash
-python -m pytest -v
-```
-
-The project has reached **58 passing tests** in its current development progress.
-
-## 🎯 Project Goal
-
-The goal is to demonstrate practical concepts in cloud security, graph-based attack-path analysis, defensive remediation planning, security validation, and automated testing.
-
-## 👩‍💻 Author
-
-**Chaitra CR**
-
-GitHub: [@crchaitra](https://github.com/crchaitra)
+<p align="center">
+  <i>Find the path. Break the connection.</i>
+</p>
