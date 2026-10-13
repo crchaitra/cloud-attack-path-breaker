@@ -15,12 +15,11 @@ def find_multi_edge_remediation(
     max_removals=3,
 ):
     """
-    Find the smallest tested set of connection removals that blocks
-    every attack path while preserving configured legitimate connections.
+    Find the smallest set of connection removals that blocks
+    all attack paths while preserving required legitimate access.
 
-    The search is bounded by max_removals.
-    Returns a result dictionary, or None if no solution is found
-    within the search limit.
+    Returns a dictionary containing the proposed changes,
+    or None if no safe solution is found.
     """
 
     if legitimate_paths is None:
@@ -30,7 +29,9 @@ def find_multi_edge_remediation(
         raise ValueError("max_removals must be at least 1.")
 
     original_paths = find_attack_paths(
-        cloud, entry_point, protected_asset
+        cloud,
+        entry_point,
+        protected_asset,
     )
 
     if not original_paths:
@@ -45,11 +46,15 @@ def find_multi_edge_remediation(
 
     edges = list(cloud.edges(data=True))
 
-    # Try smaller combinations before larger combinations.
+    # Try removing one connection first, then two, then three.
     for number_to_remove in range(
-        1, min(max_removals, len(edges)) + 1
+        1,
+        min(max_removals, len(edges)) + 1,
     ):
-        for selected_edges in combinations(edges, number_to_remove):
+        for selected_edges in combinations(
+            edges,
+            number_to_remove,
+        ):
             simulated_graph = cloud.copy()
 
             removed_connections = [
@@ -61,12 +66,14 @@ def find_multi_edge_remediation(
                 for source, target, attributes in selected_edges
             ]
 
+            # Apply the proposed removals only to the copy.
             for connection in removed_connections:
                 simulated_graph.remove_edge(
                     connection["source"],
                     connection["target"],
                 )
 
+            # Never accept a change that breaks required access.
             if not legitimate_access_preserved(
                 cloud,
                 simulated_graph,
@@ -80,6 +87,7 @@ def find_multi_edge_remediation(
                 protected_asset,
             )
 
+            # A solution is successful only when no attack path remains.
             if not remaining_paths:
                 return {
                     "removed_connections": removed_connections,
@@ -94,7 +102,7 @@ def find_multi_edge_remediation(
 
 
 def print_multi_remediation(result):
-    """Print the result of the multi-connection search."""
+    """Print the multi-connection remediation result."""
 
     print("\n=== Multi-Connection Remediation ===")
 
@@ -104,8 +112,7 @@ def print_multi_remediation(result):
             "search limit."
         )
         print(
-            "A larger search limit or a different remediation "
-            "strategy may be needed."
+            "Try a larger search limit or another remediation strategy."
         )
         return
 
@@ -113,14 +120,14 @@ def print_multi_remediation(result):
     print(f"Attack paths after: {len(result['paths_after'])}")
     print(f"Connections to review: {result['removals_count']}")
 
-    if result["removed_connections"]:
-        for connection in result["removed_connections"]:
-            print(
-                f"- {connection['source']} -> "
-                f"{connection['target']} "
-                f"({connection['type']})"
-            )
-    else:
+    for connection in result["removed_connections"]:
+        print(
+            f"- {connection['source']} -> "
+            f"{connection['target']} "
+            f"({connection['type']})"
+        )
+
+    if not result["removed_connections"]:
         print("No removals needed.")
 
     print(

@@ -11,17 +11,17 @@ def find_validated_multi_edge_remediation(
     max_removals=3,
 ):
     """
-    Validate legitimate access paths before searching
-    for a safe multi-edge security remediation.
+    Validate required access before searching for a safe
+    multi-connection remediation.
     """
 
     if legitimate_paths is None:
         legitimate_paths = []
 
-    # Step 1: Check required paths against the original graph.
+    # Validate required access against the original graph.
     validate_legitimate_paths(cloud, legitimate_paths)
 
-    # Step 2: Search for a remediation only after validation.
+    # Run the search and return its result dictionary.
     return find_multi_edge_remediation(
         cloud,
         entry_point,

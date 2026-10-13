@@ -10,8 +10,8 @@ def generate_security_report(
     """
     Generate a structured security assessment report.
 
-    Risk scores use the project's illustrative scoring model.
-    They are not validated real-world risk measurements.
+    Risk scores are illustrative project heuristics,
+    not validated real-world risk measurements.
     """
 
     paths = find_attack_paths(
@@ -31,13 +31,12 @@ def generate_security_report(
             "reasons": reasons,
         })
 
-    # Sort paths from highest to lowest illustrative risk.
     path_reports.sort(
         key=lambda item: item["risk_score"],
         reverse=True,
     )
 
-    report = {
+    return {
         "report_type": "Cloud Attack-Path Security Assessment",
         "entry_point": entry_point,
         "protected_asset": protected_asset,
@@ -51,5 +50,3 @@ def generate_security_report(
             "not validated real-world risk ratings."
         ),
     }
-
-    return report
