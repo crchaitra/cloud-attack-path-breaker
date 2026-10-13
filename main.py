@@ -15,11 +15,27 @@ def load_environment(file_path="cloud_environment.json"):
         )
 
     with path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        try:
+            environment = json.load(file)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"Invalid JSON in configuration file: {error}"
+            ) from error
+
+    if not isinstance(environment, dict):
+        raise ValueError(
+            "Environment configuration must be a JSON object."
+        )
+
+    return environment
 
 
 def build_graph(environment):
     """Build and validate a directed cloud-resource graph."""
+
+    if not isinstance(environment, dict):
+        raise ValueError("Environment configuration must be an object.")
+
     resources = environment.get("resources", [])
     connections = environment.get("connections", [])
 
@@ -32,14 +48,17 @@ def build_graph(environment):
     graph = nx.DiGraph()
     resource_ids = set()
 
+    # Validate and add resources.
     for resource in resources:
         if not isinstance(resource, dict):
             raise ValueError("Every resource must be an object.")
 
         resource_id = resource.get("id")
 
-        if not resource_id:
-            raise ValueError("Every resource must have an ID.")
+        if not isinstance(resource_id, str) or not resource_id.strip():
+            raise ValueError(
+                "Every resource must have a non-empty string ID."
+            )
 
         if resource_id in resource_ids:
             raise ValueError(f"Duplicate resource ID: {resource_id}")
@@ -47,12 +66,23 @@ def build_graph(environment):
         resource_ids.add(resource_id)
         graph.add_node(resource_id, **resource)
 
+    # Validate and add connections.
     for connection in connections:
         if not isinstance(connection, dict):
             raise ValueError("Every connection must be an object.")
 
         source = connection.get("source")
         target = connection.get("target")
+
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError(
+                "Every connection must have a valid source ID."
+            )
+
+        if not isinstance(target, str) or not target.strip():
+            raise ValueError(
+                "Every connection must have a valid target ID."
+            )
 
         if source not in resource_ids or target not in resource_ids:
             raise ValueError(
@@ -65,25 +95,28 @@ def build_graph(environment):
                 f"Duplicate connection: {source} -> {target}"
             )
 
-        graph.add_edge(
-            source,
-            target,
-            **{
-                key: value
-                for key, value in connection.items()
-                if key not in ("source", "target")
-            },
-        )
+        edge_attributes = {
+            key: value
+            for key, value in connection.items()
+            if key not in ("source", "target")
+        }
 
+        graph.add_edge(source, target, **edge_attributes)
+
+    # Validate entry point and protected asset.
     entry_point = environment.get("entry_point")
     protected_asset = environment.get("protected_asset")
 
-    if entry_point not in resource_ids:
+    if not isinstance(entry_point, str) or entry_point not in resource_ids:
         raise ValueError("Entry point is missing or does not exist.")
 
-    if protected_asset not in resource_ids:
+    if (
+        not isinstance(protected_asset, str)
+        or protected_asset not in resource_ids
+    ):
         raise ValueError("Protected asset is missing or does not exist.")
 
+    # Validate legitimate paths.
     legitimate_paths = environment.get("legitimate_paths", [])
 
     if not isinstance(legitimate_paths, list):
@@ -95,9 +128,13 @@ def build_graph(environment):
                 "Every legitimate path must contain at least two resource IDs."
             )
 
-        if any(node not in resource_ids for node in path):
+        if any(
+            not isinstance(node, str) or node not in resource_ids
+            for node in path
+        ):
             raise ValueError(
-                f"Legitimate path contains an unknown resource: {path}"
+                f"Legitimate path contains an unknown or invalid resource: "
+                f"{path}"
             )
 
     return graph
