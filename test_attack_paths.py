@@ -128,6 +128,33 @@ class TestAttackPaths(unittest.TestCase):
             reasons,
         )
 
+    # NEW DAY 8 TESTS
+
+    def test_score_explains_public_entry_point(self):
+        score, reasons = score_path(
+            self.graph, ["internet", "storage"]
+        )
+
+        self.assertEqual(score, 55)
+        self.assertIn("Public entry point (+25)", reasons)
+
+    def test_longer_path_receives_extra_points(self):
+        score, reasons = score_path(
+            self.graph, ["internet", "server", "storage"]
+        )
+
+        self.assertEqual(score, 65)
+        self.assertIn(
+            "Multiple steps in attack path (+10)",
+            reasons,
+        )
+
+    def test_empty_path_returns_zero(self):
+        score, reasons = score_path(self.graph, [])
+
+        self.assertEqual(score, 0)
+        self.assertIn("No resources in path", reasons)
+
     def test_remediation_removes_direct_access(self):
         recommendations, simulated_graph, original_paths = (
             recommend_remediations(
@@ -212,4 +239,3 @@ class TestAttackPaths(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
