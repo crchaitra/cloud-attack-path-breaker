@@ -9,6 +9,7 @@ from remediation_panel import show_remediation_panel
 from validated_remediation import (
     find_validated_multi_edge_remediation,
 )
+from misconfiguration_checks import check_misconfigurations
 
 
 st.set_page_config(
@@ -21,7 +22,7 @@ st.title("🛡️ Cloud Attack-Path Breaker")
 
 st.write(
     "Find dangerous routes through a cloud environment "
-    "and understand what needs protection."
+    "and identify potentially risky resource configurations."
 )
 
 st.info(
@@ -43,6 +44,7 @@ try:
         protected_asset,
     )
 
+    # Environment overview
     st.subheader("Cloud Environment Overview")
 
     col1, col2, col3 = st.columns(3)
@@ -50,6 +52,53 @@ try:
     col2.metric("Connections", report["connection_count"])
     col3.metric("Attack Paths", report["attack_path_count"])
 
+    # Day 26: Misconfiguration findings
+    st.divider()
+    st.header("🔎 Cloud Misconfiguration Checks")
+    st.write(
+        "Checks for potentially risky resource settings using "
+        "the project's illustrative detection rules."
+    )
+
+    findings = check_misconfigurations(cloud)
+
+    if findings:
+        high_count = sum(
+            finding["severity"] == "HIGH"
+            for finding in findings
+        )
+
+        finding_col1, finding_col2 = st.columns(2)
+        finding_col1.metric("Findings", len(findings))
+        finding_col2.metric("High-severity findings", high_count)
+
+        for number, finding in enumerate(findings, start=1):
+            with st.expander(
+                f"⚠️ Finding {number}: {finding['rule']} "
+                f"— {finding['resource_name']}"
+            ):
+                st.write(f"**Severity:** {finding['severity']}")
+                st.write(
+                    f"**Resource:** `{finding['resource_id']}`"
+                )
+                st.write(f"**Issue:** {finding['message']}")
+                st.write(
+                    f"**Recommended action:** "
+                    f"{finding['recommendation']}"
+                )
+    else:
+        st.success(
+            "No misconfigurations were detected by the "
+            "current rules."
+        )
+
+    st.caption(
+        "These findings are rule-based warnings, not proof of "
+        "exploitation or a complete cloud security audit."
+    )
+
+    # Protected asset reachability
+    st.divider()
     st.subheader("Protected Asset — Original Environment")
     st.write(f"**Entry point:** `{entry_point}`")
     st.write(f"**Protected asset:** `{protected_asset}`")
@@ -65,6 +114,7 @@ try:
             "point to the protected asset."
         )
 
+    # Original network map
     st.subheader("Original Cloud Network Map")
     show_cloud_map(
         cloud,
@@ -72,6 +122,7 @@ try:
         title="Original Environment — Attack Paths",
     )
 
+    # Attack paths
     st.subheader("Discovered Attack Paths")
 
     if report["attack_paths"]:
@@ -81,11 +132,13 @@ try:
             ):
                 st.write(f"**Route:** {' → '.join(item['path'])}")
                 st.write("**Why it received this score:**")
+
                 for reason in item["reasons"]:
                     st.write(f"- {reason}")
     else:
         st.write("No attack paths were discovered.")
 
+    # Single-edge remediation panel
     st.divider()
 
     show_remediation_panel(
@@ -95,6 +148,7 @@ try:
         legitimate_paths,
     )
 
+    # Multi-edge remediation simulation
     st.divider()
     st.header("🔬 Before-and-After Remediation Simulation")
     st.write(
@@ -124,20 +178,27 @@ try:
             paths_after = remediation_result["paths_after"]
 
             before_col, after_col, change_col = st.columns(3)
-            before_col.metric("Attack paths before", len(paths_before))
+
+            before_col.metric(
+                "Attack paths before", len(paths_before)
+            )
+
             after_col.metric(
                 "Attack paths after",
                 len(paths_after),
                 delta=len(paths_after) - len(paths_before),
                 delta_color="inverse",
             )
+
             change_col.metric(
                 "Connections removed",
                 remediation_result["removals_count"],
             )
 
             if paths_after:
-                st.warning("Some attack paths remain after remediation.")
+                st.warning(
+                    "Some attack paths remain after remediation."
+                )
             else:
                 st.success(
                     "No discovered attack paths remain in the "
@@ -145,7 +206,9 @@ try:
                 )
 
             with st.expander("View proposed connection removals"):
-                for connection in remediation_result["removed_connections"]:
+                for connection in remediation_result[
+                    "removed_connections"
+                ]:
                     st.write(
                         f"- `{connection['source']}` → "
                         f"`{connection['target']}` "
@@ -153,6 +216,7 @@ try:
                     )
 
             st.subheader("Compare Network Maps")
+
             show_before_after_maps(
                 original_graph=cloud,
                 remediated_graph=simulated_graph,
@@ -163,7 +227,7 @@ try:
     except ValueError as error:
         st.error(f"Remediation validation failed: {error}")
 
-    # Day 20: Downloadable security assessment.
+    # JSON security report export
     st.divider()
     st.header("📄 Export Security Assessment")
     st.write(
